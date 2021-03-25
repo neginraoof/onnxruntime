@@ -2290,6 +2290,107 @@ It's an extension of Gelu. It takes the sum of input A and bias input B as the i
         }
       });
 
+  static const char* TorchEmbeddingBag_ver1_doc = R"DOC(
+      Based on Torch operator EmbeddingBag, Computes sums, means or maxes of bags of embeddings.
+      )DOC";
+
+  ONNX_CONTRIB_OPERATOR_SCHEMA(TorchEmbedding)
+      .SetDomain(kMSDomain)
+      .SinceVersion(1)
+      .SetDoc(TorchEmbedding_ver1_doc)
+      .Input(
+          0,
+          "weight",
+          "The embedding matrix of size N x M. 'N' is the number of embeddings and is equal to the maximum possible "
+          "index + 1, and 'M' is equal to the embedding size",
+          "T")
+      .Input(
+          1,
+          "indices",
+          "Long 1-D or 2-D tensor containing the indices to extract from embedding matrix."
+          "If input is 2-D of shape (B, N),
+
+it will be treated as B bags (sequences) each of fixed length N, and this will return B values aggregated in a way depending on the mode. offsets is ignored and required to be None in this case.
+          "tensor(int64)")
+      .Input(
+          2,
+          "offsets",
+          "Should be set only if indices input is 1-D. It determines the starting index position "
+          "of each bag (sequence) in the indices input."
+          "tensor(int64)",
+          OpSchema::Optional)
+      .Input(
+          3,
+          "padding_idx",
+          "A 0-D scalar tensor. If specified, the entries at `padding_idx` do not contribute to the reduction.",
+          "i.e. it remains as a fixed pad. 'padding_idx' should be within the number of embeddings."
+          "tensor(int64)",
+          OpSchema::Optional)
+      .Input(
+          4,
+          "scale_grad_by_freq",
+          "A 0-D bool tensor. If given, this will scale gradients by the inverse of frequency of "
+          "the indices (words) in the mini-batch. Default  is ``False``",
+          "tensor(bool)",
+          OpSchema::Optional)
+      .Input(
+          5,
+          "per_sample_weights",
+          "Double tensor. to indicate all weights should be taken to be 1. If specified, per_sample_weights must "
+          "have exactly the same shape as input and is treated as having the same offsets, if those are not None.",
+          "tensor(double)",
+          OpSchema::Optional)
+      Input(
+          6,
+          "include_last_offset",
+          "If True, the size of offsets is equal to the number of bags + 1. Default is False.",
+          "tensor(bool)",
+          OpSchema::Optional)
+      .Attr("mode",
+            "Specifies the way to reduce the bag. Possible values are: 'sum', 'mean' or 'max'. Default: 'mean'",
+            AttributeProto::STRING,
+            std::string("mean"))
+      .Output(
+          0,
+          "Y",
+          "Aggregated embedding values of shape B x M.",
+          "T")
+      .TypeConstraint(
+          "T",
+          {"tensor(float16)",
+           "tensor(float)",
+           "tensor(double)",
+           "tensor(bfloat16)",
+           "tensor(uint8)",
+           "tensor(uint16)",
+           "tensor(uint32)",
+           "tensor(uint64)",
+           "tensor(int8)",
+           "tensor(int16)",
+           "tensor(int32)",
+           "tensor(int64)"},
+          "Constrain input and output types to all numeric tensors.")
+      .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
+        using namespace ONNX_NAMESPACE;
+        propagateElemTypeFromInputToOutput(ctx, 0, 0);
+
+        TensorShapeProto outputs_shape;
+        Dim input_dim_i;
+
+        if (hasInputShape(ctx, 1)) {
+          auto& input_shape = getInputShape(ctx, 1);
+          for (int32_t i = 0; i < input_shape.dim_size(); i++) {
+            Dim input_dim_i = input_shape.dim(i);
+            *outputs_shape.add_dim() = input_dim_i;
+          }
+        }
+
+        Dim embedding_dim;
+        unifyInputDim(ctx, 0, 1, embedding_dim);
+        *outputs_shape.add_dim() = embedding_dim;
+        updateOutputShape(ctx, 0, outputs_shape);
+      });
+
   static const char* Trilu_ver1_doc = R"DOC(
       Returns the upper or lower triangular part of a 2-D matrix, or batches of 2-D matrices. If the attribute "upper" is set to true,
       the upper triangular matrix is retained. Lower triangular matrix is retained otherwise. Default value for upper is true.
